@@ -1,20 +1,24 @@
 ﻿using Microsoft.EntityFrameworkCore;
+using WebAPI.Domain.Entities;
 
-namespace WebAPI.Data
+namespace WebAPI.Data;
+
+public class AppDbContext : DbContext
 {
-    public class AppDbContext : DbContext
+    public AppDbContext(DbContextOptions<AppDbContext> options)
+        : base(options)
     {
-        protected readonly IConfiguration Configuration;
+    }
 
-        public AppDbContext(IConfiguration configuration)
-        {
-            Configuration = configuration;
-        }
+    public DbSet<Firma> Firmy => Set<Firma>();
+    public DbSet<Dzial> Dzialy => Set<Dzial>();
+    public DbSet<Stanowisko> Stanowiska => Set<Stanowisko>();
+    public DbSet<Pracownik> Pracownicy => Set<Pracownik>();
+    public DbSet<Uprawnienie> Uprawnienia => Set<Uprawnienie>();
+    public DbSet<PracownikUprawnienie> PracownikUprawnienia => Set<PracownikUprawnienie>();
 
-        protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
-        {
-            var connectionString = Configuration.GetConnectionString("DefaultConnection");
-            optionsBuilder.UseNpgsql(connectionString);
-        }
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    {
+        modelBuilder.ApplyConfigurationsFromAssembly(typeof(AppDbContext).Assembly);
     }
 }
