@@ -21,6 +21,25 @@ public class PracownikConfiguration : IEntityTypeConfiguration<Pracownik>
             .HasColumnName("nazwisko")
             .HasMaxLength(100);
 
+        builder.Property(p => p.Login)
+            .HasColumnName("login")
+            .HasMaxLength(100);
+
+        builder.HasIndex(p => p.Login)
+            .IsUnique();
+
+        builder.Property(p => p.HasloHash)
+            .HasColumnName("hash_hasla")
+            .HasMaxLength(512);
+
+        builder.Property(p => p.Rola)
+            .HasColumnName("rola")
+            .HasConversion<string>()
+            .HasMaxLength(50);
+
+        builder.Property(p => p.CzyAktywny)
+            .HasColumnName("czy_aktywny");
+
         builder.Property(p => p.DzialId)
             .HasColumnName("id_dzialu");
 
