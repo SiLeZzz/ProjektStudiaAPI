@@ -68,11 +68,9 @@ public class EmployeesController(
             Id = employee.Id,
             Imie = employee.Imie,
             Nazwisko = employee.Nazwisko,
-            Login = employee.Login,
             Rola = employee.Rola.ToString(),
-            DzialId = employee.DzialId,
-            StanowiskoId = employee.StanowiskoId,
-            CzyAktywny = employee.CzyAktywny
+            Dzial = employee.Dzial.Nazwa,
+            Stanowisko = employee.Stanowisko.Nazwa,
         };
 
         return Created($"/employees/{employee.Id}", response);
@@ -87,11 +85,9 @@ public class EmployeesController(
                 Id = e.Id,
                 Imie = e.Imie,
                 Nazwisko = e.Nazwisko,
-                Login = e.Login,
                 Rola = e.Rola.ToString(),
-                DzialId = e.DzialId,
-                StanowiskoId = e.StanowiskoId,
-                CzyAktywny = e.CzyAktywny
+                Dzial = e.Dzial.Nazwa,
+                Stanowisko = e.Stanowisko.Nazwa,
             })
             .ToListAsync(cancellationToken);
 
@@ -109,11 +105,9 @@ public class EmployeesController(
                 Id = e.Id,
                 Imie = e.Imie,
                 Nazwisko = e.Nazwisko,
-                Login = e.Login,
                 Rola = e.Rola.ToString(),
-                DzialId = e.DzialId,
-                StanowiskoId = e.StanowiskoId,
-                CzyAktywny = e.CzyAktywny
+                Dzial =  e.Dzial.Nazwa,
+                Stanowisko = e.Stanowisko.Nazwa,
             })
             .FirstOrDefaultAsync(cancellationToken);
 
@@ -168,7 +162,6 @@ public class EmployeesController(
             Id = employee.Id,
             Imie = employee.Imie,
             Nazwisko = employee.Nazwisko,
-            Login = employee.Login,
         };
 
         return Ok(response);
@@ -184,11 +177,8 @@ public class EmployeesController(
         {
             return NotFound(new { message = "Pracownik nie został znaleziony." });
         }
-
      
         dbContext.Pracownicy.Remove(employee);
-
-    
 
         await dbContext.SaveChangesAsync(cancellationToken);
 
