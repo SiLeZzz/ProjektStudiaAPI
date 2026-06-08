@@ -69,9 +69,7 @@ public class EmployeesController(
             Imie = employee.Imie,
             Nazwisko = employee.Nazwisko,
             Rola = employee.Rola.ToString(),
-            Dzial = employee.Dzial.Nazwa,
-            Stanowisko = employee.Stanowisko.Nazwa,
-            Firma = employee.Dzial.Firma.Nazwa
+            Dzial = employee.Dzial.Nazwa
         };
 
         return Created($"/employees/{employee.Id}", response);
