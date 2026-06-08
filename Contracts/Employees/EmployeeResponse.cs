@@ -8,4 +8,5 @@ public class EmployeeResponse
     public string Rola { get; set; } = null!;
     public string Dzial { get; set; }
     public string Stanowisko { get; set; }
+    public string Firma { get; set; }
 }

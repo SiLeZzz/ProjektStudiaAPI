@@ -71,6 +71,7 @@ public class EmployeesController(
             Rola = employee.Rola.ToString(),
             Dzial = employee.Dzial.Nazwa,
             Stanowisko = employee.Stanowisko.Nazwa,
+            Firma = employee.Dzial.Firma.Nazwa
         };
 
         return Created($"/employees/{employee.Id}", response);
@@ -88,6 +89,7 @@ public class EmployeesController(
                 Rola = e.Rola.ToString(),
                 Dzial = e.Dzial.Nazwa,
                 Stanowisko = e.Stanowisko.Nazwa,
+                Firma = e.Dzial.Firma.Nazwa
             })
             .ToListAsync(cancellationToken);
 
@@ -108,6 +110,7 @@ public class EmployeesController(
                 Rola = e.Rola.ToString(),
                 Dzial =  e.Dzial.Nazwa,
                 Stanowisko = e.Stanowisko.Nazwa,
+                Firma = e.Dzial.Firma.Nazwa
             })
             .FirstOrDefaultAsync(cancellationToken);
 
