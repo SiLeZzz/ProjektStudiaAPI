@@ -1,0 +1,165 @@
+# Aktualny kontrakt API dla desktopu administratora i pracownika
+
+Endpointy publiczne:
+- POST /auth/login
+
+Endpointy dla kazdego zalogowanego uzytkownika:
+- GET /auth/me
+
+Endpointy z JWT Bearer i rola Administrator:
+- GET /companies
+- GET /companies/{id}
+- POST /companies
+- PUT /companies/{id}
+- DELETE /companies/{id}
+- GET /departments
+- GET /departments/{id}
+- POST /departments
+- PUT /departments/{id}
+- DELETE /departments/{id}
+- GET /positions
+- GET /positions/{id}
+- POST /positions
+- PUT /positions/{id}
+- DELETE /positions/{id}
+- GET /employees
+- GET /employees/{id}
+- POST /employees
+- PUT /employees/{id}
+- DELETE /employees/{id}
+- GET /permissions?search={text}
+- GET /permissions/managers
+- GET /permissions/{sygnatura}
+- POST /permissions
+- PUT /permissions/{sygnatura}
+- DELETE /permissions/{sygnatura}
+- GET /permissions/employees/search
+- GET /permissions/employees/{employeeId}/permissions
+- POST /permissions/employees/{employeeId}/permissions
+- DELETE /permissions/employees/{employeeId}/permissions/{sygnatura}
+
+Endpointy z JWT Bearer i rola Pracownik:
+- GET /permissions/approvals/pending
+- POST /permissions/approvals/{employeeId}/{signature}/approve
+
+GET /employees query params:
+- number
+- firstName
+- lastName
+- login
+- departmentId
+- department
+- companyId
+- company
+- positionId
+- position
+- role
+- isActive
+
+EmployeeResponse:
+{
+  "id": 1,
+  "imie": "Jan",
+  "nazwisko": "Kowalski",
+  "login": "jkowalski",
+  "rola": "Administrator",
+  "czyAktywny": true,
+  "dzialId": 10,
+  "dzial": "Magazyn",
+  "firmaId": 5,
+  "firma": "Firma A",
+  "stanowiskoId": 3,
+  "stanowisko": "Magazynier"
+}
+
+GET /permissions/managers:
+- zwraca liste EmployeeResponse ograniczona do aktywnych pracownikow z rola Pracownik.
+- minimalny fallback dla desktopu: GET /employees?role=Pracownik&isActive=true.
+
+CreateEmployeeRequest:
+{
+  "imie": "Jan",
+  "nazwisko": "Kowalski",
+  "login": "jkowalski",
+  "password": "haslo",
+  "rola": "Administrator",
+  "dzialId": 10,
+  "stanowiskoId": 3
+}
+
+UpdateEmployeeRequest:
+{
+  "imie": "Jan",
+  "nazwisko": "Kowalski",
+  "login": "jkowalski",
+  "password": null,
+  "rola": "Administrator",
+  "czyAktywny": true,
+  "dzialId": 10,
+  "stanowiskoId": 3
+}
+
+PositionResponse:
+{
+  "id": 1,
+  "nazwa": "Magazynier"
+}
+
+PermissionResponse uses sygnatura as the real key; there is no numeric id:
+{
+  "sygnatura": "MAG-001",
+  "nazwa": "Dostep do magazynu",
+  "opis": "...",
+  "pracownikZarzadzajacyId": 1,
+  "pracownikZarzadzajacy": "Jan Kowalski"
+}
+
+CreatePermissionRequest / UpdatePermissionRequest:
+- pracownikZarzadzajacyId musi wskazywac aktywnego pracownika z rola Pracownik.
+
+AssignPermissionsRequest:
+{
+  "sygnaturyUprawnien": ["MAG-001", "FAK-002"],
+  "wazneDo": "2026-12-31"
+}
+
+Uwaga: wazneDo pozostaje w kontrakcie dla kompatybilnosci, ale przy POST /permissions/employees/{employeeId}/permissions nowe przypisania sa zapisywane jako oczekujace z wazneDo=null. Date waznosci ustawia dopiero pracownik zarzadzajacy przez endpoint approve.
+
+PendingPermissionApprovalResponse:
+{
+  "employeeId": 12,
+  "employeeNumber": "12",
+  "employeeName": "Anna Nowak",
+  "department": "Magazyn",
+  "company": "Firma A",
+  "permissionSignature": "MAG-001",
+  "permissionName": "Dostep do magazynu",
+  "permissionDescription": "...",
+  "assignedAt": "2026-06-12",
+  "validUntil": null
+}
+
+ApprovePermissionRequest:
+{
+  "validUntil": "2027-06-12"
+}
+
+Workflow zatwierdzen:
+- GET /permissions/approvals/pending zwraca tylko przypisania z wazneDo=null, gdzie aktualny pracownik jest PracownikZarzadzajacyId uprawnienia.
+- POST /permissions/approvals/{employeeId}/{signature}/approve wymaga roli Pracownik.
+- approve zwraca 403, gdy aktualny pracownik nie zarzadza wskazanym uprawnieniem.
+- approve zwraca 404, gdy przypisanie nie istnieje.
+- approve zwraca 409, gdy przypisanie ma juz ustawione wazneDo.
+- validUntil jest wymagane i musi byc wieksze lub rowne dacie dzisiejszej.
+
+Error format:
+- Validation errors: standard ValidationProblemDetails.
+- 401/403/404/409: ProblemDetails with title/detail/status.
+
+Semantics:
+- LoginResponse.User.Rola i AuthenticatedUserDto.Rola zwracaja Administrator albo Pracownik.
+- Zwykly Pracownik nie ma dostepu do endpointow administracyjnych.
+- DELETE /employees/{id} deactivates employee by setting czyAktywny=false.
+- DELETE /positions/{id} returns 409 if employees reference the position.
+- DELETE /companies/{id}, /departments/{id}, /permissions/{sygnatura} return 409 when dependencies block deletion.
+- Bootstrap tworzy admina oraz testowego managera permission.manager z rola Pracownik i haslem bootstrapowym; domyslne uprawnienia testowe wskazuja tego managera.

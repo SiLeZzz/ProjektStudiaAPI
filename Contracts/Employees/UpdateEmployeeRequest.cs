@@ -1,17 +1,15 @@
-using System.ComponentModel.DataAnnotations;
 using WebAPI.Domain.Entities;
 
 namespace WebAPI.Contracts.Employees;
 
 public class UpdateEmployeeRequest
 {
-    [Required(ErrorMessage = "Imię jest wymagane!")]
-    public string Imie { get; set; } = string.Empty;
-    [Required(ErrorMessage = "Nazwisko jest wymagane!")]
-    public string Nazwisko { get; set; } = string.Empty;
-    [Required(ErrorMessage = "Login jest wymagany!")]
-    public string Login { get; set; } = string.Empty;
-    [Required(ErrorMessage = "Hasło jest wymagane!")]
-    public string Password { get; set; } = null!;
-    
+    public string Imie { get; set; } = null!;
+    public string Nazwisko { get; set; } = null!;
+    public string Login { get; set; } = null!;
+    public string? Password { get; set; }
+    public EmployeeRole Rola { get; set; }
+    public bool CzyAktywny { get; set; }
+    public long DzialId { get; set; }
+    public long StanowiskoId { get; set; }
 }

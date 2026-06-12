@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using WebAPI.Contracts.Employees;
 using WebAPI.Contracts.Permissions;
 using WebAPI.Data;
 using WebAPI.Domain.Entities;
@@ -10,7 +11,7 @@ namespace WebAPI.Controllers;
 [ApiController]
 [Route("permissions")]
 [Authorize(Roles = nameof(EmployeeRole.Administrator))]
-public class PermissionsController(AppDbContext dbContext) : ControllerBase
+public class PermissionsController(AppDbContext dbContext) : ApiControllerBase
 {
     [HttpGet]
     [ProducesResponseType<IReadOnlyCollection<PermissionResponse>>(StatusCodes.Status200OK)]
@@ -20,7 +21,6 @@ public class PermissionsController(AppDbContext dbContext) : ControllerBase
     {
         var query = dbContext.Uprawnienia
             .AsNoTracking()
-            .Include(u => u.PracownikZarzadzajacy)
             .AsQueryable();
 
         if (!string.IsNullOrWhiteSpace(search))
@@ -47,14 +47,42 @@ public class PermissionsController(AppDbContext dbContext) : ControllerBase
         return Ok(permissions);
     }
 
+    [HttpGet("managers")]
+    [ProducesResponseType<IReadOnlyCollection<EmployeeResponse>>(StatusCodes.Status200OK)]
+    public async Task<ActionResult<IReadOnlyCollection<EmployeeResponse>>> GetManagers(CancellationToken cancellationToken)
+    {
+        var managers = await dbContext.Pracownicy
+            .AsNoTracking()
+            .Where(p => p.Rola == EmployeeRole.Pracownik && p.CzyAktywny)
+            .OrderBy(p => p.Nazwisko)
+            .ThenBy(p => p.Imie)
+            .Select(p => new EmployeeResponse
+            {
+                Id = p.Id,
+                Imie = p.Imie,
+                Nazwisko = p.Nazwisko,
+                Login = p.Login,
+                Rola = p.Rola.ToString(),
+                CzyAktywny = p.CzyAktywny,
+                DzialId = p.DzialId,
+                Dzial = p.Dzial.Nazwa,
+                FirmaId = p.Dzial.FirmaId,
+                Firma = p.Dzial.Firma.Nazwa,
+                StanowiskoId = p.StanowiskoId,
+                Stanowisko = p.Stanowisko.Nazwa
+            })
+            .ToListAsync(cancellationToken);
+
+        return Ok(managers);
+    }
+
     [HttpGet("{sygnatura}")]
     [ProducesResponseType<PermissionResponse>(StatusCodes.Status200OK)]
-    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<PermissionResponse>> GetBySignature(string sygnatura, CancellationToken cancellationToken)
     {
         var permission = await dbContext.Uprawnienia
             .AsNoTracking()
-            .Include(u => u.PracownikZarzadzajacy)
             .Where(u => u.Sygnatura == sygnatura)
             .Select(u => new PermissionResponse
             {
@@ -67,14 +95,14 @@ public class PermissionsController(AppDbContext dbContext) : ControllerBase
             .SingleOrDefaultAsync(cancellationToken);
 
         return permission is null
-            ? NotFound(new { message = "Uprawnienie o podanej sygnaturze nie istnieje." })
+            ? NotFoundProblem("Uprawnienie o podanej sygnaturze nie istnieje.")
             : Ok(permission);
     }
 
     [HttpPost]
     [ProducesResponseType<PermissionResponse>(StatusCodes.Status201Created)]
-    [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
     public async Task<ActionResult<PermissionResponse>> Create(CreatePermissionRequest request, CancellationToken cancellationToken)
     {
         if (!ValidatePermissionInput(
@@ -88,28 +116,28 @@ public class PermissionsController(AppDbContext dbContext) : ControllerBase
             return ValidationProblem(ModelState);
         }
 
+        var normalizedSignature = request.Sygnatura.Trim();
         var permissionExists = await dbContext.Uprawnienia
-            .AnyAsync(u => u.Sygnatura == request.Sygnatura, cancellationToken);
+            .AnyAsync(u => u.Sygnatura == normalizedSignature, cancellationToken);
 
         if (permissionExists)
         {
-            return Conflict(new { message = "Uprawnienie o podanej sygnaturze juz istnieje." });
+            return ConflictProblem("Uprawnienie o podanej sygnaturze juz istnieje.");
         }
 
-        var manager = await dbContext.Pracownicy
-            .SingleOrDefaultAsync(p => p.Id == request.PracownikZarzadzajacyId, cancellationToken);
+        var manager = await GetValidPermissionManager(request.PracownikZarzadzajacyId, cancellationToken);
 
         if (manager is null)
         {
             ModelState.AddModelError(
                 nameof(request.PracownikZarzadzajacyId),
-                "Podany pracownik zarzadzajacy nie istnieje.");
+                "Podany pracownik zarzadzajacy nie istnieje albo nie jest aktywnym pracownikiem z rola Pracownik.");
             return ValidationProblem(ModelState);
         }
 
         var permission = new Uprawnienie
         {
-            Sygnatura = request.Sygnatura.Trim(),
+            Sygnatura = normalizedSignature,
             Nazwa = request.Nazwa.Trim(),
             Opis = request.Opis.Trim(),
             PracownikZarzadzajacyId = request.PracownikZarzadzajacyId
@@ -125,8 +153,8 @@ public class PermissionsController(AppDbContext dbContext) : ControllerBase
 
     [HttpPut("{sygnatura}")]
     [ProducesResponseType<PermissionResponse>(StatusCodes.Status200OK)]
-    [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<PermissionResponse>> Update(
         string sygnatura,
         UpdatePermissionRequest request,
@@ -148,17 +176,16 @@ public class PermissionsController(AppDbContext dbContext) : ControllerBase
 
         if (permission is null)
         {
-            return NotFound(new { message = "Uprawnienie o podanej sygnaturze nie istnieje." });
+            return NotFoundProblem("Uprawnienie o podanej sygnaturze nie istnieje.");
         }
 
-        var manager = await dbContext.Pracownicy
-            .SingleOrDefaultAsync(p => p.Id == request.PracownikZarzadzajacyId, cancellationToken);
+        var manager = await GetValidPermissionManager(request.PracownikZarzadzajacyId, cancellationToken);
 
         if (manager is null)
         {
             ModelState.AddModelError(
                 nameof(request.PracownikZarzadzajacyId),
-                "Podany pracownik zarzadzajacy nie istnieje.");
+                "Podany pracownik zarzadzajacy nie istnieje albo nie jest aktywnym pracownikiem z rola Pracownik.");
             return ValidationProblem(ModelState);
         }
 
@@ -173,7 +200,8 @@ public class PermissionsController(AppDbContext dbContext) : ControllerBase
 
     [HttpDelete("{sygnatura}")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
-    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
     public async Task<IActionResult> Delete(string sygnatura, CancellationToken cancellationToken)
     {
         var permission = await dbContext.Uprawnienia
@@ -181,7 +209,15 @@ public class PermissionsController(AppDbContext dbContext) : ControllerBase
 
         if (permission is null)
         {
-            return NotFound(new { message = "Uprawnienie o podanej sygnaturze nie istnieje." });
+            return NotFoundProblem("Uprawnienie o podanej sygnaturze nie istnieje.");
+        }
+
+        var hasAssignments = await dbContext.PracownikUprawnienia
+            .AnyAsync(pu => pu.SygnaturaUprawnienia == sygnatura, cancellationToken);
+
+        if (hasAssignments)
+        {
+            return ConflictProblem("Nie mozna usunac uprawnienia, ktore jest przypisane pracownikom.");
         }
 
         dbContext.Uprawnienia.Remove(permission);
@@ -202,8 +238,6 @@ public class PermissionsController(AppDbContext dbContext) : ControllerBase
     {
         var query = dbContext.Pracownicy
             .AsNoTracking()
-            .Include(p => p.Dzial)
-            .ThenInclude(d => d.Firma)
             .AsQueryable();
 
         if (!string.IsNullOrWhiteSpace(number))
@@ -260,7 +294,7 @@ public class PermissionsController(AppDbContext dbContext) : ControllerBase
 
     [HttpGet("employees/{employeeId:long}/permissions")]
     [ProducesResponseType<EmployeePermissionsResponse>(StatusCodes.Status200OK)]
-    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<EmployeePermissionsResponse>> GetEmployeePermissions(
         long employeeId,
         CancellationToken cancellationToken)
@@ -273,7 +307,7 @@ public class PermissionsController(AppDbContext dbContext) : ControllerBase
 
         if (employee is null)
         {
-            return NotFound(new { message = "Pracownik o podanym identyfikatorze nie istnieje." });
+            return NotFoundProblem("Pracownik o podanym identyfikatorze nie istnieje.");
         }
 
         var assignments = await dbContext.PracownikUprawnienia
@@ -313,14 +347,14 @@ public class PermissionsController(AppDbContext dbContext) : ControllerBase
 
     [HttpPost("employees/{employeeId:long}/permissions")]
     [ProducesResponseType<EmployeePermissionsResponse>(StatusCodes.Status200OK)]
-    [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<EmployeePermissionsResponse>> AssignPermissions(
         long employeeId,
         AssignPermissionsRequest request,
         CancellationToken cancellationToken)
     {
-        if (request.SygnaturyUprawnien.Count == 0)
+        if (request.SygnaturyUprawnien is null || request.SygnaturyUprawnien.Count == 0)
         {
             ModelState.AddModelError(
                 nameof(request.SygnaturyUprawnien),
@@ -331,10 +365,10 @@ public class PermissionsController(AppDbContext dbContext) : ControllerBase
         var normalizedSignatures = request.SygnaturyUprawnien
             .Where(s => !string.IsNullOrWhiteSpace(s))
             .Select(s => s.Trim())
-            .Distinct(StringComparer.Ordinal)
             .ToList();
 
-        if (normalizedSignatures.Count != request.SygnaturyUprawnien.Count)
+        if (normalizedSignatures.Count != request.SygnaturyUprawnien.Count ||
+            normalizedSignatures.Distinct(StringComparer.Ordinal).Count() != normalizedSignatures.Count)
         {
             ModelState.AddModelError(
                 nameof(request.SygnaturyUprawnien),
@@ -347,7 +381,7 @@ public class PermissionsController(AppDbContext dbContext) : ControllerBase
 
         if (!employeeExists)
         {
-            return NotFound(new { message = "Pracownik o podanym identyfikatorze nie istnieje." });
+            return NotFoundProblem("Pracownik o podanym identyfikatorze nie istnieje.");
         }
 
         var existingPermissions = await dbContext.Uprawnienia
@@ -384,7 +418,8 @@ public class PermissionsController(AppDbContext dbContext) : ControllerBase
             {
                 PracownikId = employeeId,
                 SygnaturaUprawnienia = signature,
-                DataNadania = today
+                DataNadania = today,
+                WazneDo = null
             });
         }
 
@@ -395,7 +430,7 @@ public class PermissionsController(AppDbContext dbContext) : ControllerBase
 
     [HttpDelete("employees/{employeeId:long}/permissions/{sygnatura}")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
-    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> RemovePermissionFromEmployee(
         long employeeId,
         string sygnatura,
@@ -408,7 +443,7 @@ public class PermissionsController(AppDbContext dbContext) : ControllerBase
 
         if (assignment is null)
         {
-            return NotFound(new { message = "Przypisanie uprawnienia do pracownika nie istnieje." });
+            return NotFoundProblem("Przypisanie uprawnienia do pracownika nie istnieje.");
         }
 
         dbContext.PracownikUprawnienia.Remove(assignment);
@@ -418,29 +453,38 @@ public class PermissionsController(AppDbContext dbContext) : ControllerBase
     }
 
     private bool ValidatePermissionInput(
-        string sygnatura,
+        string? sygnatura,
         string sygnaturaField,
-        string nazwa,
+        string? nazwa,
         string nazwaField,
-        string opis,
+        string? opis,
         string opisField)
     {
-        if (string.IsNullOrWhiteSpace(sygnatura))
-        {
-            ModelState.AddModelError(sygnaturaField, "Sygnatura jest wymagana.");
-        }
-
-        if (string.IsNullOrWhiteSpace(nazwa))
-        {
-            ModelState.AddModelError(nazwaField, "Nazwa jest wymagana.");
-        }
-
-        if (string.IsNullOrWhiteSpace(opis))
-        {
-            ModelState.AddModelError(opisField, "Opis jest wymagany.");
-        }
+        ValidateRequiredText(sygnatura, sygnaturaField, "Sygnatura", 100);
+        ValidateRequiredText(nazwa, nazwaField, "Nazwa", 200);
+        ValidateRequiredText(opis, opisField, "Opis", 1000);
 
         return ModelState.IsValid;
+    }
+
+    private void ValidateRequiredText(string? value, string field, string label, int maxLength)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            ModelState.AddModelError(field, $"{label} jest wymagany.");
+        }
+        else if (value.Trim().Length > maxLength)
+        {
+            ModelState.AddModelError(field, $"{label} moze miec maksymalnie {maxLength} znakow.");
+        }
+    }
+
+    private async Task<Pracownik?> GetValidPermissionManager(long employeeId, CancellationToken cancellationToken)
+    {
+        return await dbContext.Pracownicy
+            .SingleOrDefaultAsync(
+                p => p.Id == employeeId && p.CzyAktywny && p.Rola == EmployeeRole.Pracownik,
+                cancellationToken);
     }
 
     private static PermissionResponse MapPermissionResponse(Uprawnienie permission, Pracownik manager)

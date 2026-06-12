@@ -10,7 +10,7 @@ namespace WebAPI.Controllers;
 [ApiController]
 [Route("companies")]
 [Authorize(Roles = nameof(EmployeeRole.Administrator))]
-public class CompaniesController(AppDbContext dbContext) : ControllerBase
+public class CompaniesController(AppDbContext dbContext) : ApiControllerBase
 {
     [HttpGet]
     [ProducesResponseType<IReadOnlyCollection<CompanyResponse>>(StatusCodes.Status200OK)]
@@ -32,7 +32,7 @@ public class CompaniesController(AppDbContext dbContext) : ControllerBase
 
     [HttpGet("{id:long}")]
     [ProducesResponseType<CompanyResponse>(StatusCodes.Status200OK)]
-    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<CompanyResponse>> GetById(long id, CancellationToken cancellationToken)
     {
         var company = await dbContext.Firmy
@@ -47,14 +47,14 @@ public class CompaniesController(AppDbContext dbContext) : ControllerBase
             .SingleOrDefaultAsync(cancellationToken);
 
         return company is null
-            ? NotFound(new { message = "Firma o podanym identyfikatorze nie istnieje." })
+            ? NotFoundProblem("Firma o podanym identyfikatorze nie istnieje.")
             : Ok(company);
     }
 
     [HttpPost]
     [ProducesResponseType<CompanyResponse>(StatusCodes.Status201Created)]
-    [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
     public async Task<ActionResult<CompanyResponse>> Create(
         CreateCompanyRequest request,
         CancellationToken cancellationToken)
@@ -70,7 +70,7 @@ public class CompaniesController(AppDbContext dbContext) : ControllerBase
 
         if (nipExists)
         {
-            return Conflict(new { message = "Firma o podanym NIP juz istnieje." });
+            return ConflictProblem("Firma o podanym NIP juz istnieje.");
         }
 
         var company = new Firma
@@ -87,9 +87,9 @@ public class CompaniesController(AppDbContext dbContext) : ControllerBase
 
     [HttpPut("{id:long}")]
     [ProducesResponseType<CompanyResponse>(StatusCodes.Status200OK)]
-    [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(StatusCodes.Status404NotFound)]
-    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
     public async Task<ActionResult<CompanyResponse>> Update(
         long id,
         UpdateCompanyRequest request,
@@ -105,7 +105,7 @@ public class CompaniesController(AppDbContext dbContext) : ControllerBase
 
         if (company is null)
         {
-            return NotFound(new { message = "Firma o podanym identyfikatorze nie istnieje." });
+            return NotFoundProblem("Firma o podanym identyfikatorze nie istnieje.");
         }
 
         var normalizedNip = request.Nip.Trim();
@@ -114,7 +114,7 @@ public class CompaniesController(AppDbContext dbContext) : ControllerBase
 
         if (nipExists)
         {
-            return Conflict(new { message = "Firma o podanym NIP juz istnieje." });
+            return ConflictProblem("Firma o podanym NIP juz istnieje.");
         }
 
         company.Nazwa = request.Nazwa.Trim();
@@ -127,8 +127,8 @@ public class CompaniesController(AppDbContext dbContext) : ControllerBase
 
     [HttpDelete("{id:long}")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
-    [ProducesResponseType(StatusCodes.Status404NotFound)]
-    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
     public async Task<IActionResult> Delete(long id, CancellationToken cancellationToken)
     {
         var company = await dbContext.Firmy
@@ -136,7 +136,7 @@ public class CompaniesController(AppDbContext dbContext) : ControllerBase
 
         if (company is null)
         {
-            return NotFound(new { message = "Firma o podanym identyfikatorze nie istnieje." });
+            return NotFoundProblem("Firma o podanym identyfikatorze nie istnieje.");
         }
 
         var hasDepartments = await dbContext.Dzialy
@@ -144,7 +144,7 @@ public class CompaniesController(AppDbContext dbContext) : ControllerBase
 
         if (hasDepartments)
         {
-            return Conflict(new { message = "Nie mozna usunac firmy, do ktorej sa przypisane dzialy." });
+            return ConflictProblem("Nie mozna usunac firmy, do ktorej sa przypisane dzialy.");
         }
 
         dbContext.Firmy.Remove(company);

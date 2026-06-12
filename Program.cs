@@ -1,6 +1,9 @@
 using System.Text;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi;
@@ -49,10 +52,47 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtOptions.SecretKey)),
             ClockSkew = TimeSpan.Zero
         };
+
+        options.Events = new JwtBearerEvents
+        {
+            OnChallenge = async context =>
+            {
+                context.HandleResponse();
+                context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+                context.Response.ContentType = "application/problem+json";
+
+                var problem = new ProblemDetails
+                {
+                    Title = "Brak autoryzacji.",
+                    Detail = "Token uwierzytelniajacy jest wymagany albo niepoprawny.",
+                    Status = StatusCodes.Status401Unauthorized
+                };
+
+                await context.Response.WriteAsync(JsonSerializer.Serialize(problem));
+            },
+            OnForbidden = async context =>
+            {
+                context.Response.StatusCode = StatusCodes.Status403Forbidden;
+                context.Response.ContentType = "application/problem+json";
+
+                var problem = new ProblemDetails
+                {
+                    Title = "Brak uprawnien.",
+                    Detail = "Zalogowany uzytkownik nie ma uprawnien do wykonania tej operacji.",
+                    Status = StatusCodes.Status403Forbidden
+                };
+
+                await context.Response.WriteAsync(JsonSerializer.Serialize(problem));
+            }
+        };
     });
 
 builder.Services.AddAuthorization();
-builder.Services.AddControllers();
+builder.Services.AddControllers()
+    .AddJsonOptions(options =>
+    {
+        options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
+    });
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
 builder.Services.AddSwaggerGen(options =>

@@ -1,3 +1,5 @@
+using System.Security.Claims;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -13,7 +15,7 @@ namespace WebAPI.Controllers;
 public class AuthController(
     AppDbContext dbContext,
     IPasswordHasher<Pracownik> passwordHasher,
-    IJwtTokenService jwtTokenService) : ControllerBase
+    IJwtTokenService jwtTokenService) : ApiControllerBase
 {
     [HttpPost("login")]
     [ProducesResponseType<LoginResponse>(StatusCodes.Status200OK)]
@@ -26,13 +28,13 @@ public class AuthController(
 
         if (employee is null || !employee.CzyAktywny)
         {
-            return Unauthorized(new { message = "Nieprawidlowy login lub haslo." });
+            return UnauthorizedProblem("Nieprawidlowy login lub haslo.");
         }
 
         var verificationResult = passwordHasher.VerifyHashedPassword(employee, employee.HasloHash, request.Password);
         if (verificationResult == PasswordVerificationResult.Failed)
         {
-            return Unauthorized(new { message = "Nieprawidlowy login lub haslo." });
+            return UnauthorizedProblem("Nieprawidlowy login lub haslo.");
         }
 
         var token = jwtTokenService.GenerateToken(employee);
@@ -48,5 +50,33 @@ public class AuthController(
                 Rola = employee.Rola.ToString()
             }
         });
+    }
+
+    [Authorize]
+    [HttpGet("me")]
+    [ProducesResponseType<AuthenticatedUserDto>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status401Unauthorized)]
+    public async Task<ActionResult<AuthenticatedUserDto>> Me(CancellationToken cancellationToken)
+    {
+        var userIdValue = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (!long.TryParse(userIdValue, out var userId))
+        {
+            return UnauthorizedProblem("Token uwierzytelniajacy jest niepoprawny.");
+        }
+
+        var employee = await dbContext.Pracownicy
+            .AsNoTracking()
+            .Where(p => p.Id == userId && p.CzyAktywny)
+            .Select(p => new AuthenticatedUserDto
+            {
+                Id = p.Id,
+                Login = p.Login,
+                Rola = p.Rola.ToString()
+            })
+            .SingleOrDefaultAsync(cancellationToken);
+
+        return employee is null
+            ? UnauthorizedProblem("Uzytkownik przypisany do tokenu nie istnieje albo jest nieaktywny.")
+            : Ok(employee);
     }
 }

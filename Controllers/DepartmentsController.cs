@@ -10,7 +10,7 @@ namespace WebAPI.Controllers;
 [ApiController]
 [Route("departments")]
 [Authorize(Roles = nameof(EmployeeRole.Administrator))]
-public class DepartmentsController(AppDbContext dbContext) : ControllerBase
+public class DepartmentsController(AppDbContext dbContext) : ApiControllerBase
 {
     [HttpGet]
     [ProducesResponseType<IReadOnlyCollection<DepartmentResponse>>(StatusCodes.Status200OK)]
@@ -35,7 +35,7 @@ public class DepartmentsController(AppDbContext dbContext) : ControllerBase
 
     [HttpGet("{id:long}")]
     [ProducesResponseType<DepartmentResponse>(StatusCodes.Status200OK)]
-    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<DepartmentResponse>> GetById(long id, CancellationToken cancellationToken)
     {
         var department = await dbContext.Dzialy
@@ -52,13 +52,13 @@ public class DepartmentsController(AppDbContext dbContext) : ControllerBase
             .SingleOrDefaultAsync(cancellationToken);
 
         return department is null
-            ? NotFound(new { message = "Dzial o podanym identyfikatorze nie istnieje." })
+            ? NotFoundProblem("Dzial o podanym identyfikatorze nie istnieje.")
             : Ok(department);
     }
 
     [HttpPost]
     [ProducesResponseType<DepartmentResponse>(StatusCodes.Status201Created)]
-    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
     public async Task<ActionResult<DepartmentResponse>> Create(
         CreateDepartmentRequest request,
         CancellationToken cancellationToken)
@@ -93,8 +93,8 @@ public class DepartmentsController(AppDbContext dbContext) : ControllerBase
 
     [HttpPut("{id:long}")]
     [ProducesResponseType<DepartmentResponse>(StatusCodes.Status200OK)]
-    [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<DepartmentResponse>> Update(
         long id,
         UpdateDepartmentRequest request,
@@ -110,7 +110,7 @@ public class DepartmentsController(AppDbContext dbContext) : ControllerBase
 
         if (department is null)
         {
-            return NotFound(new { message = "Dzial o podanym identyfikatorze nie istnieje." });
+            return NotFoundProblem("Dzial o podanym identyfikatorze nie istnieje.");
         }
 
         var companyExists = await dbContext.Firmy
@@ -132,8 +132,8 @@ public class DepartmentsController(AppDbContext dbContext) : ControllerBase
 
     [HttpDelete("{id:long}")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
-    [ProducesResponseType(StatusCodes.Status404NotFound)]
-    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
     public async Task<IActionResult> Delete(long id, CancellationToken cancellationToken)
     {
         var department = await dbContext.Dzialy
@@ -141,7 +141,7 @@ public class DepartmentsController(AppDbContext dbContext) : ControllerBase
 
         if (department is null)
         {
-            return NotFound(new { message = "Dzial o podanym identyfikatorze nie istnieje." });
+            return NotFoundProblem("Dzial o podanym identyfikatorze nie istnieje.");
         }
 
         var hasEmployees = await dbContext.Pracownicy
@@ -149,7 +149,7 @@ public class DepartmentsController(AppDbContext dbContext) : ControllerBase
 
         if (hasEmployees)
         {
-            return Conflict(new { message = "Nie mozna usunac dzialu, do ktorego sa przypisani pracownicy." });
+            return ConflictProblem("Nie mozna usunac dzialu, do ktorego sa przypisani pracownicy.");
         }
 
         dbContext.Dzialy.Remove(department);
