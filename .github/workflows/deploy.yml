@@ -1,6 +1,6 @@
-name: Deploy to Rocky Linux
+name: Deploy Pre-built Package to Private Server
 
-on:
+on:  
   push:
     branches:
       - main
@@ -8,11 +8,24 @@ on:
 jobs:
   deploy:
     runs-on: self-hosted
-    
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
 
-      - name: Run deployment script
+    steps:
+
+      - name: Log in to GitHub Container Registry
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+
+      - name: Pull latest image and restart container
+        env:
+          DB_CONNECTION_STRING: ${{ secrets.DB_CONNECTION_STRING }}
         run: |
-          echo "Wdrażam aplikację na moim prywatnym serwerze!"
+          # Przełącz się do katalogu, w którym trzymasz plik docker-compose.yml na serwerze
+          cd /home/github-runner/app/
+          
+          # Pobierz najnowszą wersję obrazu z GitHub Packages
+          docker compose pull
+          
+          # Uruchom nowy kontener (stary zostanie automatycznie zastąpiony)
+          docker compose up -d
+          
+          # Opcjonalnie: wyczyść stare, nieużywane warstwy Dockera, żeby nie marnować dysku
+          docker image prune -f
