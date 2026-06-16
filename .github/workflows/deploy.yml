@@ -18,14 +18,11 @@ jobs:
         env:
           DB_CONNECTION_STRING: ${{ secrets.DB_CONNECTION_STRING }}
         run: |
-          # Przełącz się do katalogu, w którym trzymasz plik docker-compose.yml na serwerze
-          cd /home/github-runner/app/
-          
-          # Pobierz najnowszą wersję obrazu z GitHub Packages
+
+          cd /opt/csharp-api
+
           docker compose pull
           
-          # Uruchom nowy kontener (stary zostanie automatycznie zastąpiony)
           docker compose up -d
-          
-          # Opcjonalnie: wyczyść stare, nieużywane warstwy Dockera, żeby nie marnować dysku
+
           docker image prune -f
