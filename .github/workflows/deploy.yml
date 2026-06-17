@@ -11,7 +11,7 @@ jobs:
 
     strategy:
       matrix:
-        target-server: [serwer-app-1, serwer-app-2]
+        target-server: [api1, api2]
         
     runs-on: ${{ matrix.target-server }}
 
