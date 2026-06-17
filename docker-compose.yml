@@ -29,7 +29,8 @@ services:
     environment:
       ASPNETCORE_ENVIRONMENT: Development
       ASPNETCORE_HTTP_PORTS: 8080
-      ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=${POSTGRES_DB:-webapi};Username=${POSTGRES_USER:-postgres};Password=${POSTGRES_PASSWORD:-postgres}
+      ConnectionStrings__ReadConnection: Host=postgres;Port=5432;Database=${POSTGRES_DB:-webapi};Username=${POSTGRES_USER:-postgres};Password=${POSTGRES_PASSWORD:-postgres}
+      ConnectionStrings__WriteConnection: Host=postgres;Port=5432;Database=${POSTGRES_DB:-webapi};Username=${POSTGRES_USER:-postgres};Password=${POSTGRES_PASSWORD:-postgres}
       Jwt__Issuer: WebAPI
       Jwt__Audience: WebAPIClients
       Jwt__SecretKey: ${JWT_SECRET_KEY:-local-development-secret-key-change-me-12345}

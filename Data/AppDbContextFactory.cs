@@ -17,11 +17,12 @@ public class AppDbContextFactory : IDesignTimeDbContextFactory<AppDbContext>
             .AddEnvironmentVariables()
             .Build();
 
-        var connectionString = configuration.GetConnectionString("DefaultConnection");
+        var connectionString = configuration.GetConnectionString("WriteConnection")
+            ?? configuration.GetConnectionString("DefaultConnection");
 
         if (string.IsNullOrWhiteSpace(connectionString))
         {
-            throw new InvalidOperationException("Connection string 'DefaultConnection' is not configured.");
+            throw new InvalidOperationException("Connection string 'WriteConnection' is not configured.");
         }
 
         var optionsBuilder = new DbContextOptionsBuilder<AppDbContext>();

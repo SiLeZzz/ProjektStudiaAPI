@@ -2,6 +2,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -14,8 +15,11 @@ using WebAPI.Services.Auth;
 
 var builder = WebApplication.CreateBuilder(args);
 
-var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
-    ?? throw new InvalidOperationException("Connection string 'DefaultConnection' is not configured.");
+var writeConnectionString = builder.Configuration.GetConnectionString("WriteConnection")
+    ?? builder.Configuration.GetConnectionString("DefaultConnection")
+    ?? throw new InvalidOperationException("Connection string 'WriteConnection' is not configured.");
+var readConnectionString = builder.Configuration.GetConnectionString("ReadConnection")
+    ?? writeConnectionString;
 
 var jwtOptionsSection = builder.Configuration.GetSection(JwtOptions.SectionName);
 builder.Services.Configure<JwtOptions>(jwtOptionsSection);
@@ -31,8 +35,17 @@ if (string.IsNullOrWhiteSpace(jwtOptions.SecretKey) || jwtOptions.SecretKey.Leng
 }
 
 // Add services to the container.
-builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseNpgsql(connectionString));
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddDbContext<AppDbContext>((serviceProvider, options) =>
+{
+    var httpContext = serviceProvider.GetService<IHttpContextAccessor>()?.HttpContext;
+    var connectionString = UseReadConnection(httpContext?.Request.Method)
+        ? readConnectionString
+        : writeConnectionString;
+
+    options.UseNpgsql(connectionString);
+});
+builder.Services.AddHealthChecks();
 
 builder.Services.AddScoped<IPasswordHasher<Pracownik>, PasswordHasher<Pracownik>>();
 builder.Services.AddScoped<IJwtTokenService, JwtTokenService>();
@@ -139,6 +152,15 @@ app.UseHttpsRedirection();
 app.UseAuthentication();
 app.UseAuthorization();
 
+app.MapHealthChecks("/health");
 app.MapControllers();
 
 app.Run();
+
+static bool UseReadConnection(string? method)
+{
+    return method is not null &&
+           (HttpMethods.IsGet(method) ||
+           HttpMethods.IsHead(method) ||
+           HttpMethods.IsOptions(method));
+}
