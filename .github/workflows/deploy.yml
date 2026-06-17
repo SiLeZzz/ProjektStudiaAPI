@@ -1,4 +1,4 @@
-name: Deploy Pre-built Package to Private Server
+name: Deploy to Multiple Servers
 
 on:  
   push:
@@ -8,10 +8,14 @@ on:
 
 jobs:
   deploy:
-    runs-on: self-hosted
+
+    strategy:
+      matrix:
+        target-server: [serwer-app-1, serwer-app-2]
+        
+    runs-on: ${{ matrix.target-server }}
 
     steps:
-
       - name: Log in to GitHub Container Registry
         run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
 
@@ -19,11 +23,7 @@ jobs:
         env:
           DB_CONNECTION_STRING: ${{ secrets.DB_CONNECTION_STRING }}
         run: |
-
           cd /opt/csharp-api
-
           docker compose pull
-          
           docker compose up -d
-
           docker image prune -f
