@@ -21,7 +21,8 @@ jobs:
 
       - name: Pull latest image and restart container
         env:
-          DB_CONNECTION_STRING: ${{ secrets.DB_CONNECTION_STRING }}
+          READ_CONNECTION_STRING: ${{ secrets.READ_CONNECTION_STRING }}
+          WRITE_CONNECTION_STRING: ${{ secrets.WRITE_CONNECTION_STRING }}
         run: |
           cd /opt/csharp-api
           docker compose pull
